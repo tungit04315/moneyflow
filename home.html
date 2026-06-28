@@ -5468,8 +5468,21 @@
              * Subscribe realtime giao dịch thay vì getDocs một lần.
              * Tự động cập nhật khi có thay đổi từ bất kỳ tab nào.
              */
+            // function startTxnListener() {
+            //     const q = query(collection(db, COL), orderBy('transactionDate', 'desc'));
+            //     onSnapshot(q, snap => {
+            //         allTxns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            //         applyFilters();
+            //         renderOverview();
+            //     }, err => {
+            //         console.error('[Txn] onSnapshot error:', err);
+            //         showToast('Lỗi kết nối Firebase. Kiểm tra cấu hình.', 'error');
+            //     });
+            // }
+
             function startTxnListener() {
-                const q = query(collection(db, COL), orderBy('transactionDate', 'desc'));
+                const uid = getTxnUID();
+                const q = query(collection(db, `users/${uid}/transactions`), orderBy('transactionDate', 'desc'));
                 onSnapshot(q, snap => {
                     allTxns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     applyFilters();
@@ -5830,7 +5843,8 @@
                 const btn = document.getElementById('delConfirm');
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xóa…'; btn.disabled = true;
                 try {
-                    await deleteDoc(doc(db, COL, deletingId));
+                    const uid = getTxnUID();
+                    await deleteDoc(doc(db, `users/${uid}/transactions`, deletingId));
                     allTxns = allTxns.filter(t => t.id !== deletingId);
                     applyFilters(); renderOverview();
                     closeModal('delModal');
@@ -5889,12 +5903,14 @@
                 try {
                     if (editingId) {
                         payload.updatedAt = serverTimestamp();
-                        await updateDoc(doc(db, COL, editingId), payload);
+                        const uid = getTxnUID();
+                        await updateDoc(doc(db, `users/${uid}/transactions`, editingId), payload);
                         showToast('Đã cập nhật giao dịch thành công', 'success');
                     } else {
                         payload.createdAt = serverTimestamp();
                         payload.updatedAt = serverTimestamp();
-                        await addDoc(collection(db, COL), payload);
+                        const uid = getTxnUID();
+                        await addDoc(collection(db, `users/${uid}/transactions`), payload);
                         showToast('Đã thêm giao dịch thành công', 'success');
                     }
                     closeModal('formModal');
