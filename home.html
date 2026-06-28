@@ -4683,7 +4683,7 @@
                     </button>
             
                     <p style="text-align:center;font-size:11.5px;color:var(--text-light);margin-top:10px">
-                        Dữ liệu của bạn được lưu trên Firebase và sẽ không bị mất sau khi đăng xuất.
+                        Dữ liệu của bạn được lưu và sẽ không bị mất sau khi đăng xuất.
                     </p>
                 </div>
             
@@ -4706,7 +4706,7 @@
                         </div>
                         <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0">
                             <span style="color:var(--text-muted)">Nền tảng</span>
-                            <span style="font-weight:600;color:var(--text)">Firebase + Vanilla JS</span>
+                            <span style="font-weight:600;color:var(--text)">Java</span>
                         </div>
                     </div>
                 </div>
@@ -11351,7 +11351,7 @@
                         await signOut(auth);
                         showToast('Đã đăng xuất thành công!', 'success');
                         // Reload trang để quay về màn hình đăng nhập
-                        setTimeout(() => location.reload(), 800);
+                        setTimeout(() => location.href = 'https://tungit04315.github.io/moneyflow/', 800);
                     } catch (e) {
                         showToast('Lỗi đăng xuất: ' + e.message, 'error');
                         btnSignOut.disabled = false;
