@@ -28,17 +28,6 @@
             createUserWithEmailAndPassword,
             signOut
         } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-        
-        const auth = getAuth(app);
-        
-        // Expose auth ra window._mf
-        window._mf = {
-            db, auth, COL, CAT_COL, CATEGORIES, Timestamp, serverTimestamp,
-            collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc,
-            query, orderBy, where, writeBatch, onSnapshot, limit,
-            onAuthStateChanged, signInWithEmailAndPassword,
-            createUserWithEmailAndPassword, signOut
-        };
 
         const firebaseConfig = {
             apiKey: "AIzaSyDC_9wsQzx70gpMe5K_zNrACbeI-N6fuOM",
@@ -53,6 +42,16 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const COL = 'transactions';
+        const auth = getAuth(app);
+        
+        // Expose auth ra window._mf
+        window._mf = {
+            db, auth, COL, CAT_COL, CATEGORIES, Timestamp, serverTimestamp,
+            collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc,
+            query, orderBy, where, writeBatch, onSnapshot, limit,
+            onAuthStateChanged, signInWithEmailAndPassword,
+            createUserWithEmailAndPassword, signOut
+        };
 
         const CATEGORIES = [
             { id: 'luong', label: 'Lương', icon: 'fa-briefcase', color: '#16A34A', bg: '#D1FAE5', type: 'income' },
