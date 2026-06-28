@@ -21,6 +21,24 @@
             doc, getDocs, getDoc, query, orderBy, Timestamp, serverTimestamp, where,
             writeBatch, onSnapshot, limit
         } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+        import {
+            getAuth,
+            onAuthStateChanged,
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            signOut
+        } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+        
+        const auth = getAuth(app);
+        
+        // Expose auth ra window._mf
+        window._mf = {
+            db, auth, COL, CAT_COL, CATEGORIES, Timestamp, serverTimestamp,
+            collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc,
+            query, orderBy, where, writeBatch, onSnapshot, limit,
+            onAuthStateChanged, signInWithEmailAndPassword,
+            createUserWithEmailAndPassword, signOut
+        };
 
         const firebaseConfig = {
             apiKey: "AIzaSyDC_9wsQzx70gpMe5K_zNrACbeI-N6fuOM",
@@ -53,12 +71,26 @@
 
         const CAT_COL = 'categories';
 
+        // window._mf = {
+        //     db, COL, CAT_COL, CATEGORIES, Timestamp, serverTimestamp,
+        //     collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, where,
+        //     writeBatch, onSnapshot, limit
+        // };
+        // document.dispatchEvent(new Event('firebase-ready'));
+
         window._mf = {
-            db, COL, CAT_COL, CATEGORIES, Timestamp, serverTimestamp,
+            db, auth, COL, CAT_COL, CATEGORIES, Timestamp, serverTimestamp,
             collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, where,
-            writeBatch, onSnapshot, limit
+            writeBatch, onSnapshot, limit,
+            onAuthStateChanged, signInWithEmailAndPassword,
+            createUserWithEmailAndPassword, signOut
         };
-        document.dispatchEvent(new Event('firebase-ready'));
+        
+        // Chờ Auth xác nhận user TRƯỚC khi fire firebase-ready
+        onAuthStateChanged(auth, (user) => {
+            window._mf.currentUser = user;
+            document.dispatchEvent(new Event('firebase-ready'));
+        });
     </script>
 
     <style>
@@ -5383,9 +5415,9 @@
 
             /** UID ẩn danh — giống Categories module */
             function getTxnUID() {
-                let uid = localStorage.getItem('mf_uid');
-                if (!uid) { uid = 'user_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('mf_uid', uid); }
-                return uid;
+                const user = window._mf.auth.currentUser;
+                if (!user) throw new Error('Chưa đăng nhập');
+                return user.uid; // UID thật từ Firebase Auth — cố định mọi thiết bị
             }
 
             /** Chuyển hex → rgba */
@@ -5965,12 +5997,27 @@
             // ─────────────────────────────────────────
 
             /** Public API — dùng bởi switchTab và các module khác */
-            window._txnModule = { openFormAdd };
+            //window._txnModule = { openFormAdd };
 
             // Bắt đầu subscribe danh mục (realtime từ Firestore)
-            startCatListener();
+            //startCatListener();
             // Bắt đầu subscribe giao dịch (realtime)
-            startTxnListener();
+            //startTxnListener();
+            window._txnModule = { openFormAdd };
+
+            const { auth, onAuthStateChanged } = window._mf;
+            
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    startCatListener();
+                    startTxnListener();
+                } else {
+                    // Chưa đăng nhập — xóa dữ liệu cũ khỏi màn hình
+                    allTxns = [];
+                    applyFilters();
+                    renderOverview();
+                }
+            });
 
             console.log('[Transactions] Module initialized');
         });
@@ -6106,14 +6153,9 @@
 
             // ─── Lấy UID (từ window nếu có auth, hoặc dùng anonymous uid) ───
             function getUID() {
-                // Nếu có Firebase Auth, dùng currentUser.uid
-                // Hiện tại app dùng uid ẩn danh – đọc từ localStorage hoặc tạo mới
-                let uid = localStorage.getItem('mf_uid');
-                if (!uid) {
-                    uid = 'user_' + Math.random().toString(36).slice(2, 10);
-                    localStorage.setItem('mf_uid', uid);
-                }
-                return uid;
+                const user = window._mf.auth.currentUser;
+                if (!user) throw new Error('Chưa đăng nhập');
+                return user.uid; // UID thật từ Firebase Auth — cố định mọi thiết bị
             }
 
             // ══════════════════════════════════════════════════════
@@ -6650,11 +6692,28 @@
             // ══════════════════════════════════════════════════════
             // KHỞI TẠO MODULE
             // ══════════════════════════════════════════════════════
+            // async function initCatModule() {
+            //     bindEvents();
+            //     const uid = getUID();
+            //     await seedDefaultCategories(uid);
+            //     startCategoryListener(uid);
+            // }
             async function initCatModule() {
                 bindEvents();
-                const uid = getUID();
-                await seedDefaultCategories(uid);
-                startCategoryListener(uid);
+                const { auth, onAuthStateChanged } = window._mf;
+            
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        await seedDefaultCategories(user.uid);
+                        startCategoryListener(user.uid);
+                    } else {
+                        // Chưa đăng nhập — reset grid
+                        allCats = [];
+                        applyFilters();
+                        updateSummary();
+                        if (catUnsubscribe) { catUnsubscribe(); catUnsubscribe = null; }
+                    }
+                });
             }
 
             // Expose public API
@@ -6694,16 +6753,18 @@
 
             /** Lấy UID ẩn danh từ localStorage (giống Category module) */
             function getUID() {
-                let uid = localStorage.getItem('mf_uid');
-                if (!uid) {
-                    uid = 'user_' + Math.random().toString(36).slice(2, 10);
-                    localStorage.setItem('mf_uid', uid);
-                }
-                return uid;
+                const user = window._mf.auth.currentUser;
+                if (!user) throw new Error('Chưa đăng nhập');
+                return user.uid; // UID thật từ Firebase Auth — cố định mọi thiết bị
             }
 
-            const UID = getUID();
-            const BUDGET_COL = `users/${UID}/budgets`;
+            // const UID = getUID();
+            // const BUDGET_COL = `users/${UID}/budgets`;
+            function getBudgetCol() {
+                const user = window._mf.auth.currentUser;
+                if (!user) throw new Error('Chưa đăng nhập');
+                return `users/${user.uid}/budgets`;
+            }
 
             /** Hằng số kỳ hạn */
             const PERIOD_LABELS = {
@@ -6761,7 +6822,7 @@
 
             /** Thêm ngân sách mới */
             async function repo_add(data) {
-                return await addDoc(collection(db, BUDGET_COL), {
+                return await addDoc(collection(db, getBudgetCol()), {
                     ...data,
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp()
@@ -6770,7 +6831,7 @@
 
             /** Cập nhật ngân sách */
             async function repo_update(id, data) {
-                return await updateDoc(doc(db, BUDGET_COL, id), {
+                return await updateDoc(doc(db, getBudgetCol(), id), {
                     ...data,
                     updatedAt: serverTimestamp()
                 });
@@ -6778,7 +6839,7 @@
 
             /** Xóa ngân sách */
             async function repo_delete(id) {
-                return await deleteDoc(doc(db, BUDGET_COL, id));
+                return await deleteDoc(doc(db, getBudgetCol(), id));
             }
 
             /**
@@ -7013,7 +7074,7 @@
              */
             function startBudgetListener() {
                 if (budgetUnsubscribe) budgetUnsubscribe();
-                const q = query(collection(db, BUDGET_COL), orderBy('createdAt', 'desc'));
+                const q = query(collection(db, getBudgetCol()), orderBy('createdAt', 'desc'));
                 budgetUnsubscribe = onSnapshot(q, snap => {
                     allBudgets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     onDataChanged();
@@ -7626,12 +7687,30 @@
             // ── INIT  ────────────────────────────────────────────
             // ════════════════════════════════════════════════════════
 
+            // function initBudgetModule() {
+            //     bindBudgetEvents();
+            //     startCategoryListenerForBudget();
+            //     startTransactionListener();
+            //     startBudgetListener();
+            //     console.log('[Budget] Module initialized — UID:', UID);
+            // }
             function initBudgetModule() {
                 bindBudgetEvents();
-                startCategoryListenerForBudget();
-                startTransactionListener();
-                startBudgetListener();
-                console.log('[Budget] Module initialized — UID:', UID);
+                const { auth, onAuthStateChanged } = window._mf;
+            
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        startCategoryListenerForBudget();
+                        startTransactionListener();
+                        startBudgetListener();
+                    } else {
+                        allBudgets = [];
+                        renderBudgetGrid();
+                        if (budgetUnsubscribe) { budgetUnsubscribe(); budgetUnsubscribe = null; }
+                        if (txnUnsubscribe) { txnUnsubscribe(); txnUnsubscribe = null; }
+                        if (catUnsubscribeBudget) { catUnsubscribeBudget(); catUnsubscribeBudget = null; }
+                    }
+                });
             }
 
             // ── PUBLIC API ──
@@ -8612,6 +8691,19 @@
             // UTILITIES
             // ══════════════════════════════════════════════
 
+
+            function showLoginScreen() {
+                // Tạm thời hiện thông báo — sau này thay bằng màn hình login thật
+                document.querySelector('.layout').style.display = 'none';
+                if (!document.getElementById('loginNotice')) {
+                    const div = document.createElement('div');
+                    div.id = 'loginNotice';
+                    div.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;font-size:16px;color:#374151;background:#F8FAFC';
+                    div.textContent = 'Vui lòng đăng nhập để sử dụng MoneyFlow...';
+                    document.body.appendChild(div);
+                }
+            }
+            
             /** Format số tiền VND */
             const fmtRp = n => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 
