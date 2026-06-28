@@ -6832,7 +6832,7 @@
             }
 
             // const UID = getUID();
-            // const BUDGET_COL = `users/${UID}/budgets`;
+            
             function getBudgetCol() {
                 const user = window._mf.auth.currentUser;
                 if (!user) throw new Error('Chưa đăng nhập');
@@ -7163,7 +7163,8 @@
              */
             function startTransactionListener() {
                 if (txnUnsubscribe) txnUnsubscribe();
-                const q = query(collection(db, TXN_COL), where('type', '==', 'expense'));
+                const uid = getUID();
+                const q = query(collection(db, `users/${uid}/transactions`), where('type', '==', 'expense'));
                 txnUnsubscribe = onSnapshot(q, snap => {
                     allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     onDataChanged();
@@ -7177,7 +7178,8 @@
              */
             function startCategoryListenerForBudget() {
                 if (catUnsubscribeBudget) catUnsubscribeBudget();
-                const catColPath = `users/${UID}/categories`;
+                const uid = getUID();
+                const catColPath = `users/${uid}/categories`;
                 const q = query(collection(db, catColPath), orderBy('sortOrder', 'asc'));
                 catUnsubscribeBudget = onSnapshot(q, snap => {
                     allCategories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -7805,14 +7807,19 @@
             (function initRecurringModule() {
 
                 // ── Firebase refs ──
+                function getRcUID() {
+                    const user = window._mf.auth.currentUser;
+                    if (!user) throw new Error('Chưa đăng nhập');
+                    return user.uid;
+                }
                 const {
                     db, CATEGORIES, serverTimestamp, Timestamp,
                     collection, addDoc, updateDoc, deleteDoc,
                     doc, getDocs, query, orderBy, where, onSnapshot
                 } = window._mf;
 
-                const RCOL = 'recurring_transactions'; // lịch định kỳ
-                const TCOL = 'transactions';            // giao dịch đã tạo
+                const RCOL_SUFFIX = 'recurring_transactions';
+                const TCOL_SUFFIX = 'transactions';
 
                 // ── Module state ──
                 let allRecurring = [];      // toàn bộ records từ Firestore
@@ -7827,6 +7834,9 @@
                 // DATE UTILITIES
                 // ══════════════════════════════════════
 
+                function getRcCol() { return `users/${getRcUID()}/${RCOL_SUFFIX}`; }
+                function getTxnCol() { return `users/${getRcUID()}/${TCOL_SUFFIX}`; }
+                
                 /**
                  * Thêm n ngày vào date string "YYYY-MM-DD" → trả về "YYYY-MM-DD"
                  */
@@ -8015,7 +8025,7 @@
                         createdAt: serverTimestamp(),
                         updatedAt: serverTimestamp()
                     };
-                    return await addDoc(collection(db, RCOL), docData);
+                    return await addDoc(collection(db, getRcCol()), docData);
                 }
 
                 /**
@@ -8088,7 +8098,7 @@
 
                     // ── Chống tạo trùng: kiểm tra transaction đã tồn tại ──
                     const q = query(
-                        collection(db, TCOL),
+                        collection(db, getTxnCol()),
                         where('recurringId', '==', id),
                         where('transactionDate', '==', runDate)
                     );
@@ -8099,7 +8109,7 @@
                     }
 
                     // ── Tạo transaction mới ──
-                    await addDoc(collection(db, TCOL), {
+                    await addDoc(collection(db, getTxnCol()), {
                         title: r.title,
                         type: r.type,
                         categoryId: r.categoryId,
@@ -8146,7 +8156,7 @@
 
                     // Query tối ưu: sắp xếp theo nextRunDate, sau đó createdAt
                     const q = query(
-                        collection(db, RCOL),
+                        collection(db, getRcCol()),
                         orderBy('nextRunDate', 'asc')
                     );
 
@@ -8858,10 +8868,10 @@
                  */
                 subscribeTransactions(callback) {
                     if (rpUnsubTxns) rpUnsubTxns();
-                    const q = query(
-                        collection(db, COL),
-                        orderBy('transactionDate', 'desc')
-                    );
+                    const uid = window._mf.auth.currentUser?.uid;
+                    if (!uid) return () => {};
+                    const q = query(collection(db, `users/${uid}/transactions`), orderBy('transactionDate', 'desc'));
+
                     rpUnsubTxns = onSnapshot(q, snap => {
                         allTxnsRp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         callback(allTxnsRp);
@@ -8872,7 +8882,9 @@
                 /** Lắng nghe realtime danh mục */
                 subscribeCategories(callback) {
                     if (rpUnsubCats) rpUnsubCats();
-                    const q = query(collection(db, CAT_COL), orderBy('sortOrder', 'asc'));
+                    const uid = window._mf.auth.currentUser?.uid;
+                    if (!uid) return () => {};
+                    const q = query(collection(db, `users/${uid}/categories`), orderBy('sortOrder', 'asc'));
                     rpUnsubCats = onSnapshot(q, snap => {
                         allCatsRp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         callback(allCatsRp);
@@ -9615,23 +9627,26 @@
             // INIT — Bắt đầu lắng nghe Firestore
             // ══════════════════════════════════════════════
             function initReports() {
-                // Lắng nghe danh mục (có thể fail nếu collection khác path — ok)
-                ReportRepository.subscribeCategories(() => {
-                    // Khi có dữ liệu danh mục, render lại nếu tab đang active
-                    if (document.getElementById('tab-reports').classList.contains('active')) {
-                        ReportController.render();
-                    }
-                });
-
-                // Lắng nghe giao dịch — chính để drive báo cáo
-                ReportRepository.subscribeTransactions(() => {
-                    if (document.getElementById('tab-reports').classList.contains('active')) {
-                        ReportController.render();
-                    }
-                });
-
                 bindReportEvents();
-                console.log('[Reports] Module initialized');
+                const { auth, onAuthStateChanged } = window._mf;
+                
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        ReportRepository.subscribeCategories(() => {
+                            if (document.getElementById('tab-reports').classList.contains('active')) {
+                                ReportController.render();
+                            }
+                        });
+                        ReportRepository.subscribeTransactions(() => {
+                            if (document.getElementById('tab-reports').classList.contains('active')) {
+                                ReportController.render();
+                            }
+                        });
+                    } else {
+                        allTxnsRp = [];
+                        allCatsRp = [];
+                    }
+                });
             }
 
             // Kích hoạt render khi switch sang tab reports
@@ -9775,8 +9790,16 @@
             writeBatch, onSnapshot, limit
         } = window._mf;
 
-        const GOALS_COL = 'goals';
-        const HISTORY_COL = 'goal_histories';
+        function getGoalsCol() {
+            const uid = window._mf.auth.currentUser?.uid;
+            if (!uid) throw new Error('Chưa đăng nhập');
+            return `users/${uid}/goals`;
+        }
+        function getHistoryCol() {
+            const uid = window._mf.auth.currentUser?.uid;
+            if (!uid) throw new Error('Chưa đăng nhập');
+            return `users/${uid}/goal_histories`;
+        }
 
         /* ════════════════════════════════════════════════════
            goal.validation.js
@@ -9888,8 +9911,8 @@
         ════════════════════════════════════════════════════ */
         const GoalRepository = {
             /** Collection refs */
-            goalsRef() { return collection(db, GOALS_COL) },
-            historyRef() { return collection(db, HISTORY_COL) },
+            goalsRef() { return collection(db, getGoalsCol()) },
+            historyRef() { return collection(db, getHistoryCol()) },
 
             /** ─── Goals CRUD ─── */
 
@@ -9902,18 +9925,18 @@
             },
 
             async update(id, data) {
-                return updateDoc(doc(db, GOALS_COL, id), {
+                return updateDoc(doc(db, getGoalsCol(), id), {
                     ...data,
                     updatedAt: serverTimestamp()
                 });
             },
 
             async delete(id) {
-                return deleteDoc(doc(db, GOALS_COL, id));
+                return deleteDoc(doc(db, getGoalsCol(), id));  
             },
-
+            
             async getById(id) {
-                const snap = await getDoc(doc(db, GOALS_COL, id));
+                const snap = await getDoc(doc(db, getGoalsCol(), id));  
                 return snap.exists() ? { id: snap.id, ...snap.data() } : null;
             },
 
