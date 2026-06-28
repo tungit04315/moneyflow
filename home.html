@@ -4632,11 +4632,87 @@
 
             </div><!-- /tab-goals -->
             <div class="tab-page" id="tab-settings">
-                <div class="empty-state" style="margin-top:60px">
-                    <i class="fa-solid fa-gear"></i>
-                    <p style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">Cài đặt</p>
-                    <p>Tính năng cài đặt đang được phát triển.</p>
+
+                <!-- Thông tin tài khoản -->
+                <div class="list-card" style="max-width:560px">
+                    <div class="list-card-header">
+                        <div class="list-card-title">
+                            <i class="fa-solid fa-circle-user" style="color:var(--primary);margin-right:8px"></i>
+                            Tài khoản
+                        </div>
+                    </div>
+            
+                    <!-- Avatar + info -->
+                    <div style="display:flex;align-items:center;gap:16px;padding:16px;background:#F8FAFC;border-radius:14px;margin-bottom:16px">
+                        <div id="settingsAvatar"
+                            style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#2563EB,#60A5FA);
+                            display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:700;flex-shrink:0">
+                            ?
+                        </div>
+                        <div>
+                            <div id="settingsDisplayName" style="font-size:15px;font-weight:700;color:var(--text)">Đang tải…</div>
+                            <div id="settingsEmail" style="font-size:13px;color:var(--text-muted);margin-top:2px">—</div>
+                            <div id="settingsUid" style="font-size:11px;color:var(--text-light);margin-top:3px;font-family:monospace"></div>
+                        </div>
+                    </div>
+            
+                    <!-- Thống kê nhanh -->
+                    <div id="settingsStats"
+                        style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+                        <div style="background:#F0FDF4;border-radius:12px;padding:12px;text-align:center">
+                            <div style="font-size:18px;font-weight:800;color:#16A34A" id="stTotalInc">—</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Tổng thu</div>
+                        </div>
+                        <div style="background:#FEF2F2;border-radius:12px;padding:12px;text-align:center">
+                            <div style="font-size:18px;font-weight:800;color:#EF4444" id="stTotalExp">—</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Tổng chi</div>
+                        </div>
+                        <div style="background:#EFF6FF;border-radius:12px;padding:12px;text-align:center">
+                            <div style="font-size:18px;font-weight:800;color:#2563EB" id="stTxnCount">—</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Giao dịch</div>
+                        </div>
+                    </div>
+            
+                    <!-- Nút đăng xuất -->
+                    <button id="btnSignOut"
+                        style="width:100%;height:46px;border:none;border-radius:14px;
+                        background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff;
+                        font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;
+                        display:flex;align-items:center;justify-content:center;gap:10px;
+                        box-shadow:0 4px 16px rgba(239,68,68,.3);transition:all .2s">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        Đăng xuất
+                    </button>
+            
+                    <p style="text-align:center;font-size:11.5px;color:var(--text-light);margin-top:10px">
+                        Dữ liệu của bạn được lưu trên Firebase và sẽ không bị mất sau khi đăng xuất.
+                    </p>
                 </div>
+            
+                <!-- Về ứng dụng -->
+                <div class="list-card" style="max-width:560px">
+                    <div class="list-card-header">
+                        <div class="list-card-title">
+                            <i class="fa-solid fa-info-circle" style="color:var(--text-muted);margin-right:8px"></i>
+                            Về ứng dụng
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                        <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border-light)">
+                            <span style="color:var(--text-muted)">Tên ứng dụng</span>
+                            <span style="font-weight:600;color:var(--text)">MoneyFlow</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border-light)">
+                            <span style="color:var(--text-muted)">Phiên bản</span>
+                            <span style="font-weight:600;color:var(--text)">1.0.0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0">
+                            <span style="color:var(--text-muted)">Nền tảng</span>
+                            <span style="font-weight:600;color:var(--text)">Firebase + Vanilla JS</span>
+                        </div>
+                    </div>
+                </div>
+            
             </div>
 
         </div><!-- /main -->
@@ -11204,6 +11280,101 @@
             </div>
         </div>
     </div>
+    <!-- ══════════════════════════════════════════
+                MODULE: CÀI ĐẶT & ĐĂNG XUẤT
+        ══════════════════════════════════════════ -->
+        <script>
+        document.addEventListener('firebase-ready', () => {
+            const { auth, onAuthStateChanged, signOut, db,
+                    collection, query, getDocs } = window._mf;
+        
+            const fmt = n => Number(n || 0).toLocaleString('vi-VN') + ' đ';
+        
+            // ── Hiển thị thông tin user ──
+            function renderUserInfo(user) {
+                const avatar  = document.getElementById('settingsAvatar');
+                const name    = document.getElementById('settingsDisplayName');
+                const email   = document.getElementById('settingsEmail');
+                const uid     = document.getElementById('settingsUid');
+                if (!avatar) return;
+        
+                if (!user) {
+                    avatar.textContent = '?';
+                    name.textContent   = 'Chưa đăng nhập';
+                    email.textContent  = '—';
+                    uid.textContent    = '';
+                    return;
+                }
+        
+                // Avatar: chữ cái đầu của email
+                const initials = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+                avatar.textContent  = initials;
+                name.textContent    = user.displayName || 'Người dùng';
+                email.textContent   = user.email || '—';
+                uid.textContent     = 'UID: ' + user.uid;
+            }
+        
+            // ── Tính thống kê nhanh ──
+            async function loadStats(uid) {
+                try {
+                    const snap = await getDocs(
+                        collection(db, `users/${uid}/transactions`)
+                    );
+                    const txns = snap.docs.map(d => d.data());
+                    const inc = txns.filter(t => t.type === 'income')
+                                    .reduce((s, t) => s + Number(t.amount || 0), 0);
+                    const exp = txns.filter(t => t.type === 'expense')
+                                    .reduce((s, t) => s + Number(t.amount || 0), 0);
+        
+                    const el = id => document.getElementById(id);
+                    if (el('stTotalInc'))  el('stTotalInc').textContent  = fmt(inc);
+                    if (el('stTotalExp'))  el('stTotalExp').textContent  = fmt(exp);
+                    if (el('stTxnCount'))  el('stTxnCount').textContent  = txns.length;
+                } catch (e) {
+                    console.warn('[Settings] loadStats error:', e.message);
+                }
+            }
+        
+            // ── Lắng nghe trạng thái Auth ──
+            onAuthStateChanged(auth, user => {
+                renderUserInfo(user);
+                if (user) loadStats(user.uid);
+            });
+        
+            // ── Nút Đăng xuất ──
+            const btnSignOut = document.getElementById('btnSignOut');
+            if (btnSignOut) {
+                btnSignOut.addEventListener('click', async () => {
+                    const orig = btnSignOut.innerHTML;
+                    btnSignOut.disabled = true;
+                    btnSignOut.innerHTML =
+                        '<i class="fa-solid fa-spinner fa-spin"></i> Đang đăng xuất…';
+                    try {
+                        await signOut(auth);
+                        showToast('Đã đăng xuất thành công!', 'success');
+                        // Reload trang để quay về màn hình đăng nhập
+                        setTimeout(() => location.reload(), 800);
+                    } catch (e) {
+                        showToast('Lỗi đăng xuất: ' + e.message, 'error');
+                        btnSignOut.disabled = false;
+                        btnSignOut.innerHTML = orig;
+                    }
+                });
+        
+                // Hover effect
+                btnSignOut.addEventListener('mouseenter', () => {
+                    btnSignOut.style.transform   = 'translateY(-2px)';
+                    btnSignOut.style.boxShadow   = '0 6px 20px rgba(239,68,68,.45)';
+                });
+                btnSignOut.addEventListener('mouseleave', () => {
+                    btnSignOut.style.transform   = '';
+                    btnSignOut.style.boxShadow   = '0 4px 16px rgba(239,68,68,.3)';
+                });
+            }
+        
+            console.log('[Settings] Module initialized');
+        });
+        </script>
 
 </body>
 
