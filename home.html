@@ -8036,7 +8036,7 @@
                  * Cập nhật lịch định kỳ
                  */
                 async function updateRecurring(id, data) {
-                    const ref = doc(db, RCOL, id);
+                    const ref = doc(db, getRcCol(), id);
                     const updateData = {
                         title: data.title,
                         type: data.type,
@@ -8065,7 +8065,7 @@
                  * Xóa lịch định kỳ (giữ nguyên các transactions đã tạo)
                  */
                 async function deleteRecurring(id) {
-                    return await deleteDoc(doc(db, RCOL, id));
+                    return await deleteDoc(doc(db, getRcCol(), id));
                 }
 
                 /**
@@ -8075,7 +8075,7 @@
                     const r = allRecurring.find(x => x.id === id);
                     if (!r || r.status === 'finished') return;
                     const newStatus = r.status === 'active' ? 'paused' : 'active';
-                    await updateDoc(doc(db, RCOL, id), {
+                    await updateDoc(doc(db, getRcCol(), id), {
                         status: newStatus,
                         updatedAt: serverTimestamp()
                     });
@@ -8136,7 +8136,7 @@
                     }
 
                     // ── Cập nhật recurring document ──
-                    await updateDoc(doc(db, RCOL, id), {
+                    await updateDoc(doc(db, getRcCol(), id), {
                         lastRunDate: runDate,
                         nextRunDate,
                         status: newStatus,
@@ -8155,15 +8155,49 @@
                 // REALTIME LISTENER
                 // ══════════════════════════════════════
 
+                // function startRcListener() {
+                //     if (rcUnsubscribe) rcUnsubscribe();
+
+                //     // Query tối ưu: sắp xếp theo nextRunDate, sau đó createdAt
+                //     const q = query(
+                //         collection(db, getRcCol()),
+                //         orderBy('nextRunDate', 'asc')
+                //     );
+
+                //     rcUnsubscribe = onSnapshot(q, (snap) => {
+                //         allRecurring = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                //         applyRcFilters();
+                //         renderRcStats();
+                //     }, (err) => {
+                //         console.error('[Recurring] onSnapshot error:', err);
+                //         showToast('Lỗi tải dữ liệu định kỳ: ' + err.message, 'error');
+                //     });
+                // }
+                let rcCatUnsubscribe = null;
+                let rcCats = [];
+                
+                function startRcCatListener() {
+                    if (rcCatUnsubscribe) rcCatUnsubscribe();
+                    const uid = getRcUID();
+                    const q = query(
+                        collection(db, `users/${uid}/categories`),
+                        orderBy('sortOrder', 'asc')
+                    );
+                    rcCatUnsubscribe = onSnapshot(q, snap => {
+                        rcCats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    }, () => {
+                        rcCats = [];
+                    });
+                }
+                
                 function startRcListener() {
                     if (rcUnsubscribe) rcUnsubscribe();
-
-                    // Query tối ưu: sắp xếp theo nextRunDate, sau đó createdAt
+                
                     const q = query(
                         collection(db, getRcCol()),
                         orderBy('nextRunDate', 'asc')
                     );
-
+                
                     rcUnsubscribe = onSnapshot(q, (snap) => {
                         allRecurring = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         applyRcFilters();
@@ -8436,13 +8470,21 @@
                     rcCurrentType = type;
                     document.getElementById('rcBtnIncome').classList.toggle('active', type === 'income');
                     document.getElementById('rcBtnExpense').classList.toggle('active', type === 'expense');
-                    // Populate category dropdown filtered by type
+                
                     const sel = document.getElementById('rcFCategory');
                     const cur = sel.value;
                     sel.innerHTML = '<option value="">-- Chọn danh mục --</option>';
-                    CATEGORIES.filter(c => c.type === type).forEach(c => {
+                
+                    // Ưu tiên categories từ Firestore, fallback về CATEGORIES cứng
+                    const src = rcCats.length
+                        ? rcCats.filter(c => c.type === type && (!c.status || c.status === 'active'))
+                              .map(c => ({ id: c.id, label: c.name || c.label }))
+                        : CATEGORIES.filter(c => c.type === type).map(c => ({ id: c.id, label: c.label }));
+                
+                    src.forEach(c => {
                         const o = document.createElement('option');
-                        o.value = c.id; o.textContent = c.label;
+                        o.value = c.id;
+                        o.textContent = c.label;
                         sel.appendChild(o);
                     });
                     if (cur) sel.value = cur;
@@ -8737,9 +8779,27 @@
                 // INIT
                 // ══════════════════════════════════════
 
-                bindRcEvents();
-                startRcListener();
+                // bindRcEvents();
+                // startRcListener();
 
+                // console.log('[Recurring] Module initialized');
+                bindRcEvents();
+
+                const { auth, onAuthStateChanged } = window._mf;
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        startRcCatListener();
+                        startRcListener();
+                    } else {
+                        allRecurring = [];
+                        rcCats = [];
+                        renderRcGrid();
+                        renderRcStats();
+                        if (rcUnsubscribe) { rcUnsubscribe(); rcUnsubscribe = null; }
+                        if (rcCatUnsubscribe) { rcCatUnsubscribe(); rcCatUnsubscribe = null; }
+                    }
+                });
+                
                 console.log('[Recurring] Module initialized');
 
                 // ── Public API ──
