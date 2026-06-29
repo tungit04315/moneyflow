@@ -9234,9 +9234,6 @@
                     // Xu hướng so với kỳ trước
                     const periodMs = end - start;
                             
-                    <!-- const prevStart = new Date(start.getTime() - periodMs - 86400000);
-                    const prevEnd = new Date(start.getTime() - 86400001); -->
-                            
                     const prevEnd   = new Date(start.getTime() - 1); 
                     const prevStart = new Date(prevEnd.getTime() - periodMs);
                     const prevTxns = ReportUtils.filterByRange(allTxnsGlobal, prevStart, prevEnd);
