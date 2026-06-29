@@ -6216,7 +6216,7 @@
                 if (catUnsubscribe) catUnsubscribe(); // Huỷ listener cũ
 
                 const colRef = collection(db, `users/${uid}/${CAT_COL}`);
-                const q = query(colRef, orderBy('sortOrder', 'asc'), orderBy('createdAt', 'asc'));
+                const q = query(colRef, orderBy('sortOrder', 'asc'));
 
                 catUnsubscribe = onSnapshot(q, snap => {
                     allCats = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -6589,7 +6589,8 @@
 
                 // 2. Kiểm tra có giao dịch chưa (1 read tối thiểu)
                 try {
-                    const txnRef = collection(db, window._mf.COL);
+                    const uid = getUID();
+                    const txnRef = collection(db, `users/${uid}/transactions`);
                     const txnSnap = await getDocs(
                         query(txnRef, where('categoryId', '==', id), limit(1))
                     );
@@ -6878,7 +6879,7 @@
              * Cần composite index: categoryId ASC + status ASC
              */
             async function repo_checkDuplicate(categoryId, startDate, endDate, excludeId = null) {
-                const colRef = collection(db, BUDGET_COL);
+                const colRef = collection(db, getBudgetCol());
                 const q = query(
                     colRef,
                     where('categoryId', '==', categoryId),
@@ -8119,7 +8120,7 @@
                         categoryId: r.categoryId,
                         amount: r.amount,
                         note: r.note || '',
-                        transactionDate: runDate,
+                        transactionDate: Timestamp.fromDate(new Date(runDate + 'T00:00:00')),
                         recurringId: id,
                         isRecurring: true,
                         createdAt: serverTimestamp(),
@@ -9173,8 +9174,12 @@
 
                     // Xu hướng so với kỳ trước
                     const periodMs = end - start;
-                    const prevStart = new Date(start.getTime() - periodMs - 86400000);
-                    const prevEnd = new Date(start.getTime() - 86400001);
+                            
+                    <!-- const prevStart = new Date(start.getTime() - periodMs - 86400000);
+                    const prevEnd = new Date(start.getTime() - 86400001); -->
+                            
+                    const prevEnd   = new Date(start.getTime() - 1); 
+                    const prevStart = new Date(prevEnd.getTime() - periodMs);
                     const prevTxns = ReportUtils.filterByRange(allTxnsGlobal, prevStart, prevEnd);
                     const prevInc = prevTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
                     const prevExp = prevTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -10382,8 +10387,9 @@
                 if (!window._mf || !this._goals.length) return;
                 const { collection: col, query: q, where: w, getDocs: gd, orderBy: ob } = window._mf;
                 try {
-                    const snap = await gd(q(col(db, 'transactions'),
-                        w('categoryId', '==', 'tietkiem')));
+                    const uid = window._mf.auth.currentUser?.uid;
+                    if (!uid) return;
+                    const snap = await gd(q(col(db, `users/${uid}/transactions`), w('categoryId', '==', 'tietkiem')));
                     const txns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     for (const t of txns) {
                         await GoalHistoryService.syncFromTransaction(t, this._goals);
