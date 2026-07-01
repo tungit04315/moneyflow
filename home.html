@@ -8934,10 +8934,17 @@
                 return d.toISOString().slice(0, 10);
             }
 
-            /** Tính số ngày giữa 2 Date (inclusive) */
+            /**
+             * Tính số ngày inclusive giữa 2 mốc thời gian.
+             * FIX: chuẩn hoá về đầu ngày (bỏ giờ:phút:giây) trước khi tính hiệu số,
+             * tránh lệch +1 ngày do end-date thường mang giờ 23:59:59 (gần đủ 1 ngày)
+             * khiến Math.round(...) + 1 cũ bị đếm dư 1 ngày (VD: tháng 30 ngày ra 31).
+             */
             function daysBetween(a, b) {
-                const diff = Math.abs(b - a);
-                return Math.max(1, Math.round(diff / 86400000) + 1);
+                const d1 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+                const d2 = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+                const diff = Math.round((d2 - d1) / 86400000);
+                return Math.max(1, diff + 1);
             }
 
             /** Lấy danh mục từ CATEGORIES array hoặc allCatsRp */
@@ -9754,7 +9761,7 @@
             function initReports() {
                 bindReportEvents();
                 const { auth, onAuthStateChanged } = window._mf;
-                
+
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         ReportRepository.subscribeCategories(() => {
@@ -9768,16 +9775,22 @@
                             }
                         });
                     } else {
+                        // FIX: huỷ listener realtime cũ khi đăng xuất để tránh rò rỉ
+                        // dữ liệu tài chính của user trước (listener cũ vẫn chạy ngầm
+                        // và tốn kết nối nếu không được unsubscribe ở đây).
+                        if (rpUnsubTxns) { rpUnsubTxns(); rpUnsubTxns = null; }
+                        if (rpUnsubCats) { rpUnsubCats(); rpUnsubCats = null; }
                         allTxnsRp = [];
                         allCatsRp = [];
+                        if (document.getElementById('tab-reports').classList.contains('active')) {
+                            ReportController.render();
+                        }
                     }
                 });
             }
 
             // Kích hoạt render khi switch sang tab reports
-            // Intercept switchTab (được định nghĩa ở module chính)
-            const _origSwitchTab = window.switchTab;
-            // Lắng nghe nav click cho tab reports
+            // Lắng nghe nav click cho tab reports (đường vào từ sidebar desktop)
             document.querySelectorAll('.nav-item[data-tab="reports"]').forEach(el => {
                 el.addEventListener('click', () => {
                     setTimeout(() => {
@@ -9786,8 +9799,17 @@
                 });
             });
 
-            // Header action cho tab reports
-            const origSwitchTabRef = window.switchTab;
+            // FIX: bọc (patch) trực tiếp window.switchTab để bắt được MỌI đường
+            // vào tab reports — kể cả khi mở từ menu "Khác" trên mobile bottom-nav
+            // (nút đó dùng class .mob-nav-more-item, không phải .nav-item nên
+            // listener addEventListener ở trên không bao giờ được kích hoạt).
+            const _prevSwitchTabForReports = window.switchTab;
+            window.switchTab = function (tab) {
+                _prevSwitchTabForReports(tab);
+                if (tab === 'reports') {
+                    setTimeout(() => ReportController.render(), 50);
+                }
+            };
 
             initReports();
         });
